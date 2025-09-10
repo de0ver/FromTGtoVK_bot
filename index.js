@@ -5,7 +5,7 @@ require("dotenv").config();
 
 let LAST_VK_MESSAGE_ID = 0;
 let MESSAGES = {
-    0: "MESSAGE TEXT!"
+    0: "WHITELIST (t2) SPOOFER \\_//"
 }
 let START_DATE = new Date().valueOf();
 
@@ -25,13 +25,13 @@ TG.on("edited_message", msg => { editedMessageTG(msg); } );
 TG.on("photo", msg => { photoMessageTG(msg); });
 TG.on("video", msg => { videoMessageTG(msg); });
 
-VK.event('message_new', (ctx) => { fromVKtoTG_Text(ctx); });
+VK.event("message_new", (ctx) => { fromVKtoTG_Text(ctx); });
 
 function fromTGtoVK_Text(message) {
     if (message.chat.id == process.env.TG_CHAT_ID || message.chat.id == process.env.TG_USER_ID) {
         MESSAGES[message.message_id] = message.text;
         VK.sendMessage(process.env.VK_USER_ID,
-            "CHAT NAME: " + message.chat.title + "\n" +
+            "CHAT NAME: " + (message.chat.title == undefined ? message.chat.username : message.chat.title) + "\n" +
             "FROM: t.me/" + message.from.username + "\n" + 
             "MESSAGE: " + message.text
         );
@@ -42,9 +42,12 @@ function fromVKtoTG_Text(ctx) {
     if (ctx.message.from_id == process.env.VK_USER_ID) {
         //https://id.vk.com/about/business/go/docs/ru/vkid/latest/vk-id/connection/tokens/access-token
         //every 1 hour, bot will spam all messages in poll, need fix   if (new_msg_id > last_msg_id) sendMessage
-        if (ctx.message.id > LAST_VK_MESSAGE_ID && ctx.message.date >= Math.floor(START_DATE / 1000)) //kill spam with messages
+        if (ctx.message.id > LAST_VK_MESSAGE_ID && ctx.message.date >= Math.floor(START_DATE / 1000)) {
             TG.sendMessage(process.env.TG_CHAT_ID, ctx.message.text);
-            //TG.sendMessage(process.env.TG_USER_ID, ctx.message.text);
+            VK.execute("messages.delete", { 'message_ids': ctx.message.id, 'peer_id': process.env.VK_USER_ID });
+            VK.sendMessage(process.env.VK_USER_ID, 
+                "MESSAGE POSTED: \n" + ctx.message.text + "\n");
+        }
 
         LAST_VK_MESSAGE_ID = ctx.message.id;
     } else return;
@@ -61,12 +64,22 @@ function editedMessageTG(message) {
 }
 
 function photoMessageTG(message) {
-    console.log(message);
+    VK.sendMessage(process.env.VK_USER_ID,
+        "PHOTO\n" +
+        "CHAT NAME: " + message.chat.title + "\n" +
+        "FROM: t.me/" + message.from.username + "\n" + 
+        (message.forward_origin == undefined ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
+        "CAPTION: \n" + message.caption);
     return;
 }
 
 function videoMessageTG(message) {
-    console.log(message);
+    VK.sendMessage(process.env.VK_USER_ID,
+        "VIDEO\n" +
+        "CHAT NAME: " + message.chat.title + "\n" +
+        "FROM: t.me/" + message.from.username + "\n" + 
+        (message.forward_origin == null ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
+        "CAPTION: \n" + message.caption);
     return;
 }
 
