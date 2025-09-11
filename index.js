@@ -25,6 +25,8 @@ TG.on("edited_message", msg => { editedMessageTG(msg); } );
 TG.on("photo", msg => { photoMessageTG(msg); });
 TG.on("video", msg => { videoMessageTG(msg); });
 
+setInterval(deletedMessagesTG(), 5 * 60 * 1000);
+
 VK.event("message_new", (ctx) => { fromVKtoTG_Text(ctx); });
 
 function fromTGtoVK_Text(message) {
@@ -43,13 +45,14 @@ function fromVKtoTG_Text(ctx) {
         //https://id.vk.com/about/business/go/docs/ru/vkid/latest/vk-id/connection/tokens/access-token
         //every 1 hour, bot will spam all messages in poll, need fix   if (new_msg_id > last_msg_id) sendMessage
         if (ctx.message.id > LAST_VK_MESSAGE_ID && ctx.message.date >= Math.floor(START_DATE / 1000)) {
-            TG.sendMessage(process.env.TG_CHAT_ID, ctx.message.text);
-            VK.execute("messages.delete", { 'message_ids': ctx.message.id, 'peer_id': process.env.VK_USER_ID });
+            TG.sendMessage(process.env.TG_USER_ID, ctx.message.text);
+            //VK.execute("messages.delete", { 'message_ids': ctx.message.id, 'peer_id': process.env.VK_USER_ID });
             VK.sendMessage(process.env.VK_USER_ID, 
-                "MESSAGE POSTED: \n" + ctx.message.text + "\n");
-        }
+                "MESSAGE POSTED: \n" + ctx.message.text + "\n" + 
+                "MESSAGE INFO -- ID: " + ctx.message.id + " LM_ID: " + LAST_VK_MESSAGE_ID + " MD: " + ctx.message.date + " SD: " + Math.floor(START_DATE / 1000));
 
-        LAST_VK_MESSAGE_ID = ctx.message.id;
+            LAST_VK_MESSAGE_ID = ctx.message.id;
+        }
     } else return;
 }
 
@@ -69,7 +72,7 @@ function photoMessageTG(message) {
         "CHAT NAME: " + message.chat.title + "\n" +
         "FROM: t.me/" + message.from.username + "\n" + 
         (message.forward_origin == undefined ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
-        "CAPTION: \n" + message.caption);
+        (message.caption == undefined ? "" : "CAPTION: \n" + message.caption));
     return;
 }
 
@@ -78,9 +81,13 @@ function videoMessageTG(message) {
         "VIDEO\n" +
         "CHAT NAME: " + message.chat.title + "\n" +
         "FROM: t.me/" + message.from.username + "\n" + 
-        (message.forward_origin == null ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
-        "CAPTION: \n" + message.caption);
+        (message.forward_origin == undefined ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
+        (message.caption == undefined ? "" : "CAPTION: \n" + message.caption));
     return;
+}
+
+function deletedMessagesTG() {
+    
 }
 
 VK.startPolling((err) => {
