@@ -11,29 +11,80 @@ let MESSAGES = {
 }
 let START_DATE = new Date().valueOf();
 
-let TG = new tg_bot(process.env.API_KEY_TG, { polling: true });
-let VK = new vk_bot(process.env.API_KEY_VK);
+let TG = null;
+let VK = null;
 
-if (TG == null)
-    return console.error("TG BOT NOT CREATED! CHECK TG API KEY!");
+function handlersSetup() {
+    TG.removeAllListeners();
 
-if (VK == null)
-    return console.error("VK BOT NOT CREATED! CHECK VK API KEY!");
+    TG.on("text", msg => { fromTGtoVK_Text(msg); });
+    TG.on("edited_message", msg => { editedMessageTG(msg); } );
+    TG.on("photo", msg => { photoMessageTG(msg); });
+    TG.on("video", msg => { videoMessageTG(msg); });
 
-console.log('BOTS CREATED!\n' + new Date(START_DATE));
+    setInterval(deletedMessagesTG, 5 * 60 * 1000);
 
-VK.sendMessage(process.env.VK_USER_ID, "BOT STARTED: " + new Date(START_DATE));
-TG.sendMessage(process.env.TG_USER_ID, "BOT STARTED: " + new Date(START_DATE));
+    VK.command('/скрепинг', async (ctx) => { await parseSite(ctx); });
+    VK.event("message_new", (ctx) => { fromVKtoTG_Text(ctx); });
 
-TG.on("text", msg => { fromTGtoVK_Text(msg); });
-TG.on("edited_message", msg => { editedMessageTG(msg); } );
-TG.on("photo", msg => { photoMessageTG(msg); });
-TG.on("video", msg => { videoMessageTG(msg); });
+    VK.startPolling((err) => {
+        console.error(err);
+        restartBots();
+    });
 
-setInterval(deletedMessagesTG, 5 * 60 * 1000);
+    TG.on("polling_error", err => { 
+        console.error(err); 
+        restartBots(); 
+    });
 
-VK.command('/скрепинг', async (ctx) => { await parseSite(ctx); });
-VK.event("message_new", (ctx) => { fromVKtoTG_Text(ctx); });
+    TG.on("error", err => {
+        console.error(err);
+        restartBots();
+    });
+}
+
+function initializeBots() {
+    try {
+        TG = new tg_bot(process.env.API_KEY_TG, { polling: true });
+        VK = new vk_bot(process.env.API_KEY_VK);
+
+        if (TG == null)
+            return console.error("TG BOT NOT CREATED! CHECK TG API KEY!");
+
+        if (VK == null)
+            return console.error("VK BOT NOT CREATED! CHECK VK API KEY!");
+
+        console.log('BOTS CREATED!\n' + new Date(START_DATE));
+
+        VK.sendMessage(process.env.VK_USER_ID, "BOT STARTED: " + new Date(START_DATE));
+        TG.sendMessage(process.env.TG_USER_ID, "BOT STARTED: " + new Date(START_DATE));
+
+        handlersSetup();
+
+        return true;
+    } catch (e) {
+        console.error(e);
+        return false;
+    }
+}
+
+function restartBots() {
+    try {
+        if (TG)
+            TG.stopPolling();
+
+        //if (VK)
+            //VK.removeAllListeners();
+    } catch (e) {
+        console.error(e);
+    }
+
+    setTimeout(() => {
+        if (!initializeBots)
+            restartBots();
+
+    }, 15 * 60 * 1000);
+}
 
 function fromTGtoVK_Text(message) {
     if (message.chat.id == process.env.TG_CHAT_ID || message.chat.id == process.env.TG_USER_ID) {
@@ -42,8 +93,12 @@ function fromTGtoVK_Text(message) {
             VK.sendMessage(process.env.VK_USER_ID,
                 "CHAT NAME: " + (message.chat.title == undefined ? message.chat.username : message.chat.title) + "\n" +
                 "FROM: t.me/" + message.from.username + "\n" + 
+                "TIME: " + new Date(message.date * 1000) +
                 "MESSAGE: " + message.text
             );
+            // TG.sendMessage(process.env.TG_USER_ID, 
+            //     "MESSAGE POSTED: \n" + message.text + "\n" + 
+            //     "MESSAGE INFO -- ID: " + message.message_id + "MD: " + message.date + " SD: " + Math.floor(START_DATE / 1000));
         }
     } else return;
 }
@@ -55,9 +110,9 @@ function fromVKtoTG_Text(ctx) {
         if (ctx.message.id > LAST_VK_MESSAGE_ID && ctx.message.date >= Math.floor(START_DATE / 1000)) {
             TG.sendMessage(process.env.TG_CHAT_ID, ctx.message.text);
             //VK.execute("messages.delete", { 'message_ids': ctx.message.id, 'peer_id': process.env.VK_USER_ID });
-            VK.sendMessage(process.env.VK_USER_ID, 
-                "MESSAGE POSTED: \n" + ctx.message.text + "\n" + 
-                "MESSAGE INFO -- ID: " + ctx.message.id + " LM_ID: " + LAST_VK_MESSAGE_ID + " MD: " + ctx.message.date + " SD: " + Math.floor(START_DATE / 1000));
+            // VK.sendMessage(process.env.VK_USER_ID, 
+            //     "MESSAGE POSTED: \n" + ctx.message.text + "\n" + 
+            //     "MESSAGE INFO -- ID: " + ctx.message.id + " LM_ID: " + LAST_VK_MESSAGE_ID + " MD: " + ctx.message.date + " SD: " + Math.floor(START_DATE / 1000));
 
             LAST_VK_MESSAGE_ID = ctx.message.id;
         }
@@ -69,6 +124,7 @@ function editedMessageTG(message) {
         VK.sendMessage(process.env.VK_USER_ID,
             "CHAT NAME: " + message.chat.title + "\n" +
             "FROM: t.me/" + message.from.username + "\n" + 
+            "TIME: " + new Date(message.date * 1000) +
             "MESSAGE EDITED: \n" + MESSAGES[message.message_id] + "\n->\n" + message.text);
         MESSAGES[message.message_id] = message.text;
     } else return;
@@ -79,7 +135,8 @@ function photoMessageTG(message) {
         "PHOTO\n" +
         "CHAT NAME: " + message.chat.title + "\n" +
         "FROM: t.me/" + message.from.username + "\n" + 
-        (message.forward_origin == undefined ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
+        "TIME: " + new Date(message.date * 1000) +
+        (message.forward_origin == undefined ? "" : "FORWARDED: " + message.forward_origin.chat.title == undefined ? "" : message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
         (message.caption == undefined ? "" : "CAPTION: \n" + message.caption));
     return;
 }
@@ -89,6 +146,7 @@ function videoMessageTG(message) {
         "VIDEO\n" +
         "CHAT NAME: " + message.chat.title + "\n" +
         "FROM: t.me/" + message.from.username + "\n" + 
+        "TIME: " + new Date(message.date * 1000) +
         (message.forward_origin == undefined ? "" : "FORWARDED: " + message.forward_origin.chat.title + "\nt.me/" + message.forward_origin.chat.username + "\n") +
         (message.caption == undefined ? "" : "CAPTION: \n" + message.caption));
     return;
@@ -117,9 +175,4 @@ async function parseSite(ctx) {
     // }
 }
 
-
-VK.startPolling((err) => {
-  if (err) console.error(err);
-});
-
-TG.on("polling_error", err => console.log(err.data.error.message));
+initializeBots();
